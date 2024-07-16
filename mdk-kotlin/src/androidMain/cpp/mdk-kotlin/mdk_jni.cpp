@@ -154,7 +154,7 @@ extern "C" {
         env->ReleaseStringUTFChars(url, cString);
     }
 
-    JNIEXPORT void JNICALL
+    JNIEXPORT jobject JNICALL
     Java_fr_dcs_mdk_jni_JNIPlayer_prepare(
         JNIEnv *env,
         jobject thiz,
@@ -167,20 +167,38 @@ extern "C" {
         auto playerWrapper = reinterpret_cast<PlayerWrapper*>(handle);
         if (playerWrapper == nullptr) {
             LOG_ERROR("Aborting prepare: playerWrapper is null");
-            return;
+            return nullptr;
         }
-        std::promise<void> promise;
-        std::future<void> future = promise.get_future();
+        std::promise<mdk::MediaInfo> promise;
+        std::future<mdk::MediaInfo> future = promise.get_future();
         playerWrapper->getMdkPlayer()->prepare(
             /* startPosition = */start_position,
-            /* cb = */ [unloadImmediately, &promise] (int64_t position, bool* boost) {
+            /* cb = */ [playerWrapper, unloadImmediately, &promise] (int64_t position, bool* boost) {
                 LOG_INFO("prepare callback: [position=%lld]", position);
-                promise.set_value();
+                auto mediaInfo = playerWrapper->getMdkPlayer()->mediaInfo();
+                promise.set_value(mediaInfo);
                 return !unloadImmediately;
             },
             /* flags = */(mdk::SeekFlag) flags
         );
-        return future.get();
+        auto result = future.get();
+        return buildJavaMediaInfo(env, result);
+    }
+
+    JNIEXPORT jobject JNICALL
+    Java_fr_dcs_mdk_jni_JNIPlayer_getMediaInfo(
+        JNIEnv *env,
+        jobject thiz,
+        jlong handle
+    ) {
+        LOG_INFO("getMediaInfo");
+        auto playerWrapper = reinterpret_cast<PlayerWrapper*>(handle);
+        if (playerWrapper == nullptr) {
+            LOG_ERROR("Aborting getMediaInfo: playerWrapper is null");
+            return nullptr;
+        }
+        auto result = playerWrapper->getMdkPlayer()->mediaInfo();
+        return buildJavaMediaInfo(env, result);
     }
 
     JNIEXPORT void JNICALL
@@ -214,7 +232,7 @@ extern "C" {
             return;
         }
         auto tracks = std::set<int>();
-        tracks.insert(index);
+        if (index >= 0) tracks.insert(index);
         playerWrapper->getMdkPlayer()->setActiveTracks( (mdk::MediaType) type, tracks);
     }
 
@@ -353,9 +371,26 @@ extern "C" {
             /* surface = */ surface,
             /* width = */ width,
             /* height = */ height,
-            /* type = */mdk::Player::Auto
+            /* type = */ mdk::Player::SurfaceType::Auto
         );
         return reinterpret_cast<jlong>(surface);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_fr_dcs_mdk_jni_JNIPlayer_resizeSurface(
+        JNIEnv *env,
+        jobject thiz,
+        jlong handle,
+        jint width,
+        jint height
+    ) {
+        LOG_INFO("resizeSurface: [width=%d, height=%d]", width, height);
+        auto playerWrapper = reinterpret_cast<PlayerWrapper*>(handle);
+        if (playerWrapper == nullptr) {
+            LOG_ERROR("Aborting resizeSurface: playerWrapper is null");
+            return;
+        }
+        playerWrapper->getMdkPlayer()->resizeSurface(width, height);
     }
 
     JNIEXPORT void JNICALL
@@ -373,39 +408,56 @@ extern "C" {
         delete playerWrapper;
     }
 
-    /*jlong Java_fr_dcs_mdk_jni_JNIPlayer_addOnMediaStatusListener(
+    JNIEXPORT jlong JNICALL
+    Java_fr_dcs_mdk_jni_JNIPlayer_getPosition(
+        JNIEnv *env,
+        jobject thiz,
+        jlong handle
+    ) {
+        auto playerWrapper = reinterpret_cast<PlayerWrapper*>(handle);
+        if (playerWrapper == nullptr) {
+            return 0;
+        }
+        return playerWrapper->getMdkPlayer()->position();
+    }
+
+    JNIEXPORT void JNICALL
+    Java_fr_dcs_mdk_jni_JNIPlayer_setProperty(
         JNIEnv *env,
         jobject thiz,
         jlong handle,
-        jobject listener
+        jstring key,
+        jstring value
     ) {
         auto playerWrapper = reinterpret_cast<PlayerWrapper*>(handle);
-        if (playerWrapper == nullptr) return 0;
-        mdk::CallbackToken* token = nullptr;
-        auto thread = new ThreadQueue<MediaStatus>(token);
-        playerWrapper->getMdkPlayer()->onMediaStatus(
-            *//* cb = *//* [thread] (const MediaStatus oldStatus, const MediaStatus newStatus) {
-                thread->push(newStatus);
-                return true;
-            },
-            token
-        );
-        return reinterpret_cast<jlong>(thread);
+        if (playerWrapper == nullptr) {
+            return;
+        }
+        auto cKey = env->GetStringUTFChars(key, nullptr);
+        auto cValue = env->GetStringUTFChars(value, nullptr);
+        playerWrapper->getMdkPlayer()->setProperty(cKey, cValue);
+        env->ReleaseStringUTFChars(key, cKey);
+        env->ReleaseStringUTFChars(value, cValue);
     }
 
-    jobject Java_fr_dcs_mdk_jni_JNIPlayer_awaitNextMediaStatus(
-        JNIEnv* env,
+    JNIEXPORT jstring JNICALL
+    Java_fr_dcs_mdk_jni_JNIPlayer_getProperty(
+        JNIEnv *env,
         jobject thiz,
-        jlong wrapperHandle,
-        jlong threadHandle
+        jlong handle,
+        jstring key
     ) {
-        auto playerWrapper = reinterpret_cast<PlayerWrapper*>(wrapperHandle);
-        auto thread = reinterpret_cast<ThreadQueue<MediaStatus>*>(threadHandle);
-        if (playerWrapper == nullptr || thread == nullptr) return nullptr;
-        auto nextEvent = thread->pop();
-        return nullptr;
-        playerWrapper->getMdkPlayer()->onMediaStatus(nullptr, thread->token);
+        auto playerWrapper = reinterpret_cast<PlayerWrapper*>(handle);
+        if (playerWrapper == nullptr) {
+            return nullptr;
+        }
+        auto cKey = env->GetStringUTFChars(key, nullptr);
+        auto result = playerWrapper->getMdkPlayer()->property(cKey);
+        env->ReleaseStringUTFChars(key, cKey);
+        auto javaResult = env->NewStringUTF(result.c_str());
+        return javaResult;
+    }
 
-    }*/
 
 }
+

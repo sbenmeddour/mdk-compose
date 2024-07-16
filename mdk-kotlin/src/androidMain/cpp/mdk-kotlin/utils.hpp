@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <android/log.h>
+#include <mdk/Player.h>
 
 #define LOG_TAG "mdk-jni"
 #define LOG_INFO(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -25,5 +26,7 @@ private:
 };
 
 std::vector<std::string> javaStringArray_toVector(JNIEnv* env, jobjectArray javaArray);
+
+jobject buildJavaMediaInfo(JNIEnv* env, const mdk::MediaInfo& mediaInfo);
 
 #endif //MDK_COMPOSE_UTILS_HPP

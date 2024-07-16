@@ -27,6 +27,8 @@ kotlin {
     commonMain.dependencies {
       implementation(libs.kotlinx.coroutines.core)
       implementation(compose.runtime)
+      implementation(compose.ui)
+      implementation(compose.foundation)
     }
     androidMain.dependencies {
       implementation(libs.androidx.core.ktx)
