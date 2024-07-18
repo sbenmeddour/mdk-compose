@@ -89,7 +89,7 @@ fun App() {
               PlayerPage(
                 modifier = Modifier
                   .fillMaxSize()
-                  .padding(it),
+                  .padding(top = it.calculateTopPadding()),
               )
             },
           )
@@ -108,8 +108,8 @@ fun PlayerPage(modifier: Modifier = Modifier) {
 
   LaunchedEffect(Unit) {
     println("Launched effect dans da mere")
-    player.setMedia("https://vfx.mtime.cn/Video/2021/11/16/mp4/211116131456748178.mp4")
-    //player.setMedia("https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_2160p_hevc.mp4")
+    //player.setMedia("https://vfx.mtime.cn/Video/2021/11/16/mp4/211116131456748178.mp4")
+    player.setMedia("https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_2160p_hevc.mp4")
     //player.setMedia("https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8")
     player.prepare()
     isReady = true

@@ -23,7 +23,7 @@ actual fun PlayerView(
   modifier: Modifier,
   player: Player,
 ) {
-  UIKitView(
+  /*UIKitView(
     modifier = modifier,
     factory = {
       UIView().apply {
@@ -31,21 +31,27 @@ actual fun PlayerView(
       }
     },
     onResize = player::onUIViewResized
-  )
+  )*/
   //fixme: Black screen no output... :/
-  /*val device = remember { MTLCreateSystemDefaultDevice() ?: throw Exception("Cannot create device") }
+
+  val device = remember { MTLCreateSystemDefaultDevice() ?: throw Exception("Cannot create device") }
   val commandQueue = remember { device.newCommandQueue() ?: throw Exception("Cannot create commandQueue") }
   val delegate = remember { MetalDelegate(player, commandQueue) }
 
   UIKitView(
-    modifier = modifier.border(4.dp, Color.Red),
+    modifier = modifier,
     factory = {
-      val frame = CGRectMake(x = 0.0, y = 0.0, width = 300.0, height = 300.0)
+      val frame = CGRectMake(x = 0.0, y = 0.0, width = 0.0, height = 0.0)
       MTKView(frame = frame, device = device).apply {
         this.device = device
         this.framebufferOnly = false
+
+        player.withForeignScope {
+          initializeForeignContext(this@apply, commandQueue)
+        }
+
+
         this.delegate = delegate
-        player.setRenderTarget(metalKitView = this, commandQueue = commandQueue)
       }
     },
     onRelease = {
@@ -55,7 +61,7 @@ actual fun PlayerView(
     },
     background = Color.Black,
     interactive = false,
-  )*/
+  )
 
 
 }
@@ -83,15 +89,18 @@ class MetalDelegate(
 ) : NSObject(), MTKViewDelegateProtocol {
 
   override fun mtkView(view: MTKView, drawableSizeWillChange: CValue<CGSize>) {
-    drawableSizeWillChange.useContents {
-      player.setVideoSurfaceSize(view, height.roundToInt(), width.roundToInt())
+    val (width, height) = drawableSizeWillChange.useContents { width.roundToInt() to height.roundToInt() }
+    player.withForeignScope {
+      setSurfaceSize(width, height)
     }
   }
 
   override fun drawInMTKView(view: MTKView) {
-    player.renderVideo(view)
-    val drawable = view.currentDrawable ?: return
-    val buffer = commandQueue.commandBuffer() ?: return
+    player.withForeignScope { render() }
+    val drawable = view.currentDrawable
+    val buffer = commandQueue.commandBuffer()
+    if (drawable == null || buffer == null) return
+
     buffer.presentDrawable(drawable)
     buffer.commit()
   }

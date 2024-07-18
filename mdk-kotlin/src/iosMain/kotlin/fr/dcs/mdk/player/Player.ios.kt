@@ -49,7 +49,13 @@ actual class Player actual constructor(
 
   private val logHandler = cValue<mdkLogHandler> {
     cb = staticCFunction { level, value, opaque ->
-
+      return@staticCFunction
+      val message = value?.toKStringFromUtf8().orEmpty()
+      when {
+        message.contains("getVideoOutContext") -> return@staticCFunction
+        message.contains("to be destroyed is not rendered by") -> return@staticCFunction
+        else -> println("MDK LOG: = ${value?.toKStringFromUtf8()}")
+      }
     }
     opaque = thisRef.asCPointer()
   }
@@ -214,6 +220,7 @@ actual class Player actual constructor(
     }
   }
 
+
   internal fun setNativeSurface(view: UIView) {
     memScoped {
       val renderApi = alloc<mdkMetalRenderAPI>().apply {
@@ -225,59 +232,10 @@ actual class Player actual constructor(
     }
   }
 
-  internal fun setVideoSurfaceSize(view: UIView, width: Int, height: Int) {
-    println("Player.updateNativeSurface")
-    println("view = [${view}], width = [${width}], height = [${height}]")
-    memScoped {
-      val player = mdkPlayerApi.pointed.`object`!!
-      val viewPointer: COpaquePointer? = interpretCPointer(rawValue = view.objcPtr())
-      mdkPlayerApi.pointed.setVideoSurfaceSize!!.invoke(
-        p1 = player,
-        p2 = width,
-        p3 = height,
-        p4 = viewPointer,
-      )
-    }
-  }
 
-  internal fun setRenderTarget(
-    metalKitView: MTKView,
-    commandQueue: MTLCommandQueueProtocol,
-  ) {
-    println("Player.setRenderTarget")
-    println("metalKitView = [${metalKitView}], commandQueue = [${commandQueue}]")
-    memScoped {
-      val player = mdkPlayerApi.pointed.`object`!!
-
-      val renderTargetFunction = staticCFunction<COpaquePointer?, COpaquePointer?> { pointer ->
-        if (pointer == null) {
-          return@staticCFunction null
-        }
-        val maybeMetalView = interpretObjCPointerOrNull<MTKView>(pointer.rawValue) ?: return@staticCFunction null
-        val drawable = maybeMetalView.currentDrawable ?: return@staticCFunction null
-        val texture: COpaquePointer? = interpretCPointer(drawable.objcPtr())
-        return@staticCFunction texture
-      }
-
-      val renderApi = alloc<mdkMetalRenderAPI>().apply {
-        type = MDK_RenderAPI_Metal
-        device = interpretCPointer(metalKitView.device!!.objcPtr())
-        cmdQueue = interpretCPointer(commandQueue.objcPtr())
-        opaque = interpretCPointer(metalKitView.objcPtr())
-        currentRenderTarget = renderTargetFunction //renderTargetFunction
-        layer = interpretCPointer(metalKitView.layer.objcPtr())
-      }
-      mdkPlayerApi.pointed.setRenderAPI!!.invoke(
-        p1 = player,
-        p2 = renderApi.ptr.reinterpret(),
-        p3 = interpretCPointer(metalKitView.objcPtr()),
-      )
-
-    }
-
-  }
 
   private var currentUIView: COpaquePointer? = null
+
 
   internal fun setUiView(view: UIView, width: Int, height: Int) {
     currentUIView = interpretCPointer(rawValue = view.objcPtr())
@@ -330,25 +288,16 @@ actual class Player actual constructor(
     )
   }
 
+  private val foreignScopeImpl = ForeignContextScopeImpl(this.mdkPlayerApi)
+
+  internal fun withForeignScope(block: ForeignContextScope.() -> Unit) {
+    block.invoke(foreignScopeImpl)
+  }
+
   internal fun detachNativeSurface() {
 
   }
 
-  fun renderVideo(view: MTKView) {
-    memScoped {
-      val player = mdkPlayerApi.pointed.`object`!!
-      val viewRef = StableRef.create(view)
-      try {
-        mdkPlayerApi.pointed.renderVideo?.invoke(
-          p1 = player,
-          p2 = viewRef.asCPointer(),
-        )
-      } finally {
-        viewRef.dispose()
-      }
-
-    }
-  }
 
   private fun CPointer<mdkPlayerAPI>.withRef(block: CValuesRef<CPointerVar<mdkPlayerAPI>>.() -> Unit) {
     val ref = StableRef.create(this)
@@ -375,6 +324,92 @@ actual class Player actual constructor(
     }
   }
 
+
+  private class ForeignContextScopeImpl(private val api: CPointer<mdkPlayerAPI>) : ForeignContextScope {
+
+    var viewRef: StableRef<MTKView>? = null
+
+    private val renderFunction = staticCFunction<COpaquePointer?, COpaquePointer?> renderFunction@ { pointer ->
+      if (pointer == null) return@renderFunction null
+      //val metalView = pointer.asStableRef<MTKView>().get()// interpretObjCPointerOrNull<MTKView>(pointer.rawValue)
+      val metalView = interpretObjCPointerOrNull<MTKView>(pointer.rawValue)
+      val drawable = metalView?.currentDrawable
+
+      println("metalView = ${metalView}")
+      println("drawable = ${drawable}")
+
+      if (metalView == null) return@renderFunction null
+      if (drawable == null) return@renderFunction null
+
+      return@renderFunction interpretCPointer(drawable.texture.objcPtr())
+    }
+
+    override fun initializeForeignContext(view: MTKView, queue: MTLCommandQueueProtocol) {
+      println("ForeignContextScopeImpl.initializeForeignContext")
+      println("view = [${view}], queue = [${queue}]")
+
+      val player = api.pointed.`object`
+
+      viewRef = StableRef.create(view)
+
+      memScoped {
+        val renderApi = alloc<mdkMetalRenderAPI>().apply {
+          type = MDK_RenderAPI_Metal
+          device = interpretCPointer(view.device!!.objcPtr())
+          cmdQueue = interpretCPointer(queue.objcPtr())
+          opaque = interpretCPointer(view.objcPtr())
+          currentRenderTarget = renderFunction
+          layer = interpretCPointer(view.layer.objcPtr())
+        }
+        api.pointed.setRenderAPI!!.invoke(player, renderApi.ptr.reinterpret(), null)
+      }
+    }
+
+    override fun render() {
+      val player = api.pointed.`object`
+      api.pointed.renderVideo!!.invoke(player, null)
+    }
+
+    override fun setSurfaceSize(width: Int, height: Int) {
+      println("ForeignContextScopeImpl.setSurfaceSize")
+      println("width = [${width}], height = [${height}]")
+      val player = api.pointed.`object`
+      api.pointed.setVideoSurfaceSize!!.invoke(
+        p1 = player,
+        p2 = width,
+        p3 = height,
+        p4 = null,
+      )
+    }
+
+  }
+
+
+  fun createForeignContext(
+    view: MTKView,
+    commandQueueProtocol: MTLCommandQueueProtocol,
+  ): ForeignContext {
+    return ForeignContext(view, commandQueueProtocol)
+  }
+
+  fun attachForeignContext(context: ForeignContext) {
+    memScoped {
+      val renderApi = alloc<mdkMetalRenderAPI>().apply {
+        type = MDK_RenderAPI_Metal
+        device = interpretCPointer(context.view.device!!.objcPtr())
+        cmdQueue = interpretCPointer(context.queue.objcPtr())
+        opaque = interpretCPointer(context.view.objcPtr())
+        currentRenderTarget = context.renderFunction
+        layer = interpretCPointer(context.view.layer.objcPtr())
+      }
+      val player = mdkPlayerApi.pointed.`object`
+      mdkPlayerApi.pointed.setRenderAPI!!.invoke(player, renderApi.ptr.reinterpret(), null)
+    }
+  }
+
+  fun detachForeignContext(context: ForeignContext) {
+    mdkPlayerApi.pointed.setRenderAPI!!.invoke(mdkPlayerApi.pointed.`object`, null, null)
+  }
 
 
 }
@@ -426,5 +461,31 @@ private fun onPrepared(position: Long, boost: CPointer<BooleanVar>?, opaque: COp
   unwrapped.complete(result)
   return true
 }
+
+
+
+interface ForeignContextScope {
+  fun initializeForeignContext(view: MTKView, queue: MTLCommandQueueProtocol)
+  fun render()
+  fun setSurfaceSize(width: Int, height: Int)
+}
+
+
+@OptIn(ExperimentalForeignApi::class)
+class ForeignContext internal constructor(
+  internal val view: MTKView,
+  internal val queue: MTLCommandQueueProtocol,
+) {
+
+  internal val renderFunction = staticCFunction<COpaquePointer?, COpaquePointer?> renderFunction@ { pointer ->
+    if (pointer == null) return@renderFunction null
+    val metalView = interpretObjCPointerOrNull<MTKView>(pointer.rawValue) ?: return@renderFunction null
+    val texture = metalView.currentDrawable?.texture ?: return@renderFunction null
+    return@renderFunction interpretCPointer(texture.objcPtr())
+  }
+
+}
+
+
 
 
