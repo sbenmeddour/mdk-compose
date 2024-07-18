@@ -13,7 +13,6 @@ expect class Player(
 ) {
 
   internal val scope: CoroutineScope
-
   val state: PlayerState
   val events: Flow<PlayerEvent>
 
@@ -21,14 +20,10 @@ expect class Player(
   fun pause()
   fun stop()
   fun playPause()
-
   fun setMedia(url: String)
   suspend fun prepare(position: Duration = Duration.ZERO, vararg flags: SeekFlag = arrayOf(SeekFlag.Default))
-
   fun setTrack(type: MediaType, index: Int)
-
   fun release()
-
   fun seek(position: Duration, vararg flag: SeekFlag)
 
   val properties: Properties

@@ -127,8 +127,7 @@ fun PlayerPage(modifier: Modifier = Modifier) {
     content = {
       PlayerView(
         modifier = Modifier
-          .fillMaxSize()
-          .border(8.dp, Color.Red),
+          .fillMaxSize(),
         player = player,
       )
       Controls(

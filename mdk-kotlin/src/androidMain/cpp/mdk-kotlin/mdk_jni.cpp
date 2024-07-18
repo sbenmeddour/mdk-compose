@@ -37,10 +37,10 @@ extern "C" {
         jstring value
     ) {
         auto key = env->GetStringUTFChars(name, nullptr);
-        auto cString = env->GetStringUTFChars(value, nullptr);
+        auto cString = value == nullptr ? nullptr : env->GetStringUTFChars(value, nullptr);
         mdk::SetGlobalOption(key, cString);
         env->ReleaseStringUTFChars(name, key);
-        env->ReleaseStringUTFChars(value, cString);
+        if (cString != nullptr) env->ReleaseStringUTFChars(value, cString);
     }
 
     JNIEXPORT void JNICALL
@@ -65,6 +65,36 @@ extern "C" {
         auto key = env->GetStringUTFChars(name, nullptr);
         mdk::SetGlobalOption(key, value);
         env->ReleaseStringUTFChars(name, key);
+    }
+
+    JNIEXPORT jint JNICALL
+    Java_fr_dcs_mdk_base_MdkLibrary_getGlobalOptionInt(
+            JNIEnv *env,
+            jobject thiz,
+            jstring name
+    ) {
+        auto key = env->GetStringUTFChars(name, nullptr);
+        int value;
+        auto success = mdk::GetGlobalOption(key, &value);
+        env->ReleaseStringUTFChars(name, key);
+        if (!success) return 0;
+        return value;
+    }
+    
+    JNIEXPORT jstring JNICALL
+    Java_fr_dcs_mdk_base_MdkLibrary_getGlobalOptionString(
+            JNIEnv *env,
+            jobject thiz,
+            jstring name
+    ) {
+        auto key = env->GetStringUTFChars(name, nullptr);
+        const char* value = nullptr;
+        auto success = mdk::GetGlobalOption(key, &value);
+        env->ReleaseStringUTFChars(name, key);
+        if (!success) return nullptr;
+        if (value == nullptr) return nullptr;
+        auto javaResult = env->NewStringUTF(value);
+        return javaResult;
     }
 
     JNIEXPORT jlong JNICALL
@@ -458,6 +488,4 @@ extern "C" {
         return javaResult;
     }
 
-
 }
-

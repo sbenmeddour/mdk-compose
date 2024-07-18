@@ -27,6 +27,9 @@ kotlin {
   applyDefaultHierarchyTemplate()
 
   sourceSets {
+    all {
+      languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+    }
     commonMain.dependencies {
       implementation(libs.kotlinx.coroutines.core)
       implementation(compose.runtime)
