@@ -19,7 +19,17 @@ class ComposePlayerState internal constructor() : PlayerState() {
   override var _position: Duration by mutableStateOf(Duration.ZERO)
   override var _nativeMediaStatus: Int by mutableIntStateOf(0)
   override var _nativeState: Int by mutableIntStateOf(0)
-  override var _nativeMediaInfo: NativeMediaInfo? by mutableStateOf(null)
+
+  private var nativeMediaInfo: NativeMediaInfo? by mutableStateOf(null)
+
+  override var _nativeMediaInfo: NativeMediaInfo?
+    get() = nativeMediaInfo
+    set(value) {
+      nativeMediaInfo = value
+      activeTracks[MediaType.Video] = listOf(value?.video?.firstOrNull()?.index ?: 0)
+      activeTracks[MediaType.Audio] = listOf(value?.audio?.firstOrNull()?.index ?: 0)
+      activeTracks[MediaType.Subtitle] = listOf(value?.subtitles?.firstOrNull()?.index ?: 0)
+    }
 
   override val position: Duration
     get() = this._position
@@ -34,7 +44,7 @@ class ComposePlayerState internal constructor() : PlayerState() {
       .map {
         Audio(
           index = it.index,
-          isActive = _activeTracks[MediaType.Audio]?.contains(it.index) == true,
+          isActive = activeTracks[MediaType.Audio]?.contains(it.index) == true,
           metaData = it.metaData,
           codec = AudioCodec(
             codec = it.codec.codec,
@@ -55,7 +65,7 @@ class ComposePlayerState internal constructor() : PlayerState() {
       .map {
         Video(
           index = it.index,
-          isActive = _activeTracks[MediaType.Video]?.contains(it.index) == true,
+          isActive = activeTracks[MediaType.Video]?.contains(it.index) == true,
           metaData = it.metaData,
           frames = it.frames,
           rotation = it.rotation,
@@ -82,7 +92,7 @@ class ComposePlayerState internal constructor() : PlayerState() {
       .map {
         Subtitle(
           index = it.index,
-          isActive = _activeTracks[MediaType.Subtitle]?.contains(it.index) == true,
+          isActive = activeTracks[MediaType.Subtitle]?.contains(it.index) == true,
           metaData = it.metaData,
           codec = SubtitleCodec(
             codec = it.codec.codec,

@@ -129,17 +129,17 @@ actual class Player actual constructor(
         MediaType.Video -> MDK_MediaType_Video
         MediaType.Subtitle -> MDK_MediaType_Subtitle
       }
-      val tracksArray = when {
-        index == -1 -> allocArray<IntVar>(1)
-        else -> allocArray<IntVar>(2).apply { this[0] = index }
+      val activeTracksList: List<Int> = when {
+        index == -1 -> emptyList()
+        else -> listOf(index)
       }
+      state.activeTracks[type] = activeTracksList
 
-      val size = when (index) {
-        -1 -> 0
-        else -> 1
+      val arraySize = activeTracksList.size + 1
+      val cArray = allocArray<IntVar>(arraySize).apply {
+        for (i in activeTracksList.indices) this[i] = activeTracksList[i]
       }
-
-      mdkPlayerApi.pointed.setActiveTracks!!.invoke(player, nativeType, tracksArray, size.toULong())
+      mdkPlayerApi.pointed.setActiveTracks!!.invoke(player, nativeType, cArray, arraySize.toULong())
     }
   }
 

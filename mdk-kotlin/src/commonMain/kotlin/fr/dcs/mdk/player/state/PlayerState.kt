@@ -12,7 +12,7 @@ import kotlin.time.Duration
 @Stable
 sealed class PlayerState {
 
-  internal val _activeTracks = mutableStateMapOf(
+  internal val activeTracks = mutableStateMapOf(
     *MediaType.entries.map { it to listOf(0) }.toTypedArray()
   )
 
