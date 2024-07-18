@@ -10,6 +10,7 @@ import fr.dcs.mdk.native.NativeState
 import fr.dcs.mdk.player.configuration.PlayerConfiguration
 import fr.dcs.mdk.player.events.PlayerEvent
 import fr.dcs.mdk.player.state.PlayerState
+import fr.dcs.mdk.utils.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,11 +24,13 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-actual class Player(
+actual class Player actual constructor(
   configuration: PlayerConfiguration,
   actual val state: PlayerState,
-  internal actual val scope: CoroutineScope = CoroutineScope(context = SupervisorJob() + Dispatchers.IO),
 ) : SurfaceHolder.Callback, Properties {
+
+
+  internal actual val scope: CoroutineScope = CoroutineScope(context = SupervisorJob() + Dispatchers.IO)
 
   private val listener = object : JniListener {
 
@@ -40,25 +43,7 @@ actual class Player(
     }
 
     override fun onMediaEvent(error: Long, category: String?, detail: String?) {
-      val event = when (category) {
-        "reader.buffering" -> PlayerEvent.Buffering(progress = error / 100f)
-        "metadata" -> PlayerEvent.MetaDataReady
-        "thread.audio" -> when (error) {
-          0L -> return //todo: ThreadStopped
-          1L -> PlayerEvent.ThreadStarted(MediaType.Audio)
-          else -> return
-        }
-        "thread.video" -> when (error) {
-          0L -> return //todo: ThreadStopped
-          1L -> PlayerEvent.ThreadStarted(MediaType.Video)
-          else -> return
-        }
-        "render.video" -> when (detail) {
-          "1st_frame" -> PlayerEvent.FirstFrameRendered
-          else -> return
-        }
-        else -> return
-      }
+      val event = PlayerEvent.fromData(error, category, detail) ?: return
       _events.tryEmit(event)
     }
 
@@ -82,8 +67,8 @@ actual class Player(
       value.holder.addCallback(this)
     }
 
-  override fun get(key: String): String? = JNIPlayer.getProperty(handle, key)
-  override fun set(key: String, value: String) = JNIPlayer.setProperty(handle, key, value)
+  override operator fun get(key: String): String? = JNIPlayer.getProperty(handle, key)
+  override operator fun set(key: String, value: String) = JNIPlayer.setProperty(handle, key, value)
 
   actual fun play() {
     JNIPlayer.setState(handle, NativeState.Playing.nativeValue)
@@ -113,9 +98,9 @@ actual class Player(
     JNIPlayer.release(handle)
   }
 
-  actual suspend fun prepare() {
+  actual suspend fun prepare(position: Duration, vararg flags: SeekFlag) {
     val mediaInfo = withContext(Dispatchers.IO) {
-      JNIPlayer.prepare(handle, 0L, 0, false)
+      JNIPlayer.prepare(handle, position.inWholeMilliseconds, flags.combined, false)
     }
     withContext(Dispatchers.Main) {
       state._nativeMediaInfo = mediaInfo

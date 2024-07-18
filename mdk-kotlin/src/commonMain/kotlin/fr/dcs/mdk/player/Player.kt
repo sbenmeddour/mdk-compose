@@ -1,12 +1,16 @@
 package fr.dcs.mdk.player
 
+import fr.dcs.mdk.player.configuration.PlayerConfiguration
 import fr.dcs.mdk.player.events.PlayerEvent
 import fr.dcs.mdk.player.state.PlayerState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Duration
 
-expect class Player {
+expect class Player(
+  configuration: PlayerConfiguration,
+  state: PlayerState,
+) {
 
   internal val scope: CoroutineScope
 
@@ -19,7 +23,7 @@ expect class Player {
   fun playPause()
 
   fun setMedia(url: String)
-  suspend fun prepare()
+  suspend fun prepare(position: Duration = Duration.ZERO, vararg flags: SeekFlag = arrayOf(SeekFlag.Default))
 
   fun setTrack(type: MediaType, index: Int)
 

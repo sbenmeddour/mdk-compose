@@ -3,7 +3,7 @@ package fr.dcs.mdk.player.configuration
 actual class PlayerConfiguration(
   val audioBackends: List<String>,
   val videoDecoders: List<String>,
-  val properties: Map<String, String>,
+  actual val properties: Map<String, String>,
 ) {
 
   actual companion object {

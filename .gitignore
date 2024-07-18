@@ -18,3 +18,5 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 /mdk-kotlin/src/androidMain/cpp/mdk-sdk/
 /mdk-kotlin/src/androidMain/cpp/mdk-sdk-android.7z
+/iosApp/Pods/
+/iosApp/Podfile.lock

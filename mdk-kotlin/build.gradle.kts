@@ -20,8 +20,11 @@ kotlin {
     framework {
       baseName = "MdkKotlin"
     }
+    pod(name = "mdk")
     noPodspec()
   }
+
+  applyDefaultHierarchyTemplate()
 
   sourceSets {
     commonMain.dependencies {

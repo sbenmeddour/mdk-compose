@@ -16,7 +16,9 @@ internal data class NativeMediaInfo(
   val video: List<NativeVideoStream>,
   val subtitles: List<NativeSubtitle>,
   //todo: val programInfo: List<NativeProgramInfo>,
-)
+) {
+  companion object
+}
 
 //todo: data class NativeMetaData
 

@@ -2,6 +2,8 @@
 
 package fr.dcs.mdk
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -101,37 +104,48 @@ fun App() {
 fun PlayerPage(modifier: Modifier = Modifier) {
   val player = rememberPlayer()
   var isReady by remember { mutableStateOf(false) }
+  var isResumed by remember { mutableStateOf(false) }
 
-  LaunchedEffect(key1 = isReady) {
-    if (!isReady) {
-      return@LaunchedEffect
-    }
+  LaunchedEffect(Unit) {
+    println("Launched effect dans da mere")
     player.setMedia("https://vfx.mtime.cn/Video/2021/11/16/mp4/211116131456748178.mp4")
     //player.setMedia("https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_2160p_hevc.mp4")
+    //player.setMedia("https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8")
     player.prepare()
-    player.play()
+    isReady = true
   }
-  PlayerView(
+
+  LaunchedEffect(isResumed, isReady) {
+    when {
+      !isResumed -> player.pause()
+      isReady -> player.play()
+    }
+  }
+
+  Box(
     modifier = modifier,
-    player = player,
+    content = {
+      PlayerView(
+        modifier = Modifier
+          .fillMaxSize()
+          .border(8.dp, Color.Red),
+        player = player,
+      )
+      Controls(
+        modifier = Modifier.fillMaxSize(),
+        player = player
+      )
+    },
   )
-  Controls(
-    modifier = modifier,
-    player = player
-  )
+
+
+
+
   val owner = LocalLifecycleOwner.current
   DisposableEffect(Unit) {
     val observer = LifecycleEventObserver { _, event ->
-      isReady = event.targetState == Lifecycle.State.RESUMED
-      when (event) {
-        Lifecycle.Event.ON_PAUSE -> player.pause()
-        Lifecycle.Event.ON_STOP -> player.stop()
-        Lifecycle.Event.ON_CREATE,
-        Lifecycle.Event.ON_START,
-        Lifecycle.Event.ON_RESUME,
-        Lifecycle.Event.ON_DESTROY,
-        Lifecycle.Event.ON_ANY -> return@LifecycleEventObserver
-      }
+      val targetState = event.targetState
+      isResumed = targetState == Lifecycle.State.RESUMED
     }
     owner.lifecycle.addObserver(observer)
     onDispose {
@@ -150,6 +164,7 @@ fun Controls(
   modifier: Modifier = Modifier,
   player: Player,
 ) {
+  var isVisible by remember { mutableStateOf(true) }
   val sliderSource = remember { MutableInteractionSource() }
   val isSliding by sliderSource.collectIsDraggedAsState()
 
@@ -167,96 +182,124 @@ fun Controls(
   val userSliderPosition = remember { mutableFloatStateOf(0f) }
   Box(
     modifier = modifier
-      .fillMaxSize(),
+      .fillMaxSize()
+      .clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = { isVisible = !isVisible },
+      ),
     content = {
-      Row(
-        modifier = Modifier.align(Alignment.TopEnd),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+      AnimatedVisibility(
+        modifier = Modifier.fillMaxSize(),
+        visible = isVisible,
+        enter = fadeIn(),
+        exit = fadeOut(),
         content = {
-          val onTrackClicked = { track: Track ->
-            when {
-              track.isActive -> player.setTrack(track.type, -1)
-              else -> player.setTrack(track.type, track.index)
-            }
-          }
-          TrackSelector(
-            icon = Icons.Rounded.VideoSettings,
-            tracks = remember { derivedStateOf { player.state.video } },
-            onClick = onTrackClicked,
-          )
-          TrackSelector(
-            icon = Icons.Rounded.Audiotrack,
-            tracks = remember { derivedStateOf { player.state.audio } },
-            onClick = onTrackClicked,
-          )
-          TrackSelector(
-            icon = Icons.Rounded.Subtitles,
-            tracks = remember { derivedStateOf { player.state.subtitles } },
-            onClick = onTrackClicked,
-          )
-        }
-      )
-
-      IconButton(
-        modifier = Modifier
-          .align(Alignment.Center),
-        onClick = player::playPause,
-        content = {
-          Icon(
-            modifier = Modifier.size(64.dp),
-            imageVector = when (player.state.playbackStatus) {
-              PlaybackStatus.EndOfFile, PlaybackStatus.Stopped -> Icons.Rounded.RestartAlt
-              PlaybackStatus.Idle -> Icons.Rounded.PlayArrow
-              PlaybackStatus.Paused -> Icons.Rounded.PlayArrow
-              is PlaybackStatus.Playing -> Icons.Rounded.Pause
-            },
-            contentDescription = null,
-          )
-        }
-      )
-
-      Column(
-        modifier = Modifier
-          .align(Alignment.BottomCenter)
-          .fillMaxWidth(.9f)
-          .windowInsetsPadding(WindowInsets.systemBars)
-          .fillMaxWidth(),
-        content = {
-          val positionAsText = remember {
-            val builder = StringBuilder()
-            derivedStateOf { player.state.position.formatElapsedTime(builder) }
-          }
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+          Box(
+            modifier = Modifier.fillMaxSize(),
             content = {
-              Text(
-                text = positionAsText.value,
-                style = MaterialTheme.typography.bodySmall,
+              Row(
+                modifier = Modifier.align(Alignment.TopEnd),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                content = {
+                  val onTrackClicked = { track: Track ->
+                    when {
+                      track.isActive -> player.setTrack(track.type, -1)
+                      else -> player.setTrack(track.type, track.index)
+                    }
+                  }
+                  TrackSelector(
+                    icon = Icons.Rounded.VideoSettings,
+                    tracks = remember { derivedStateOf { player.state.video } },
+                    onClick = onTrackClicked,
+                  )
+                  TrackSelector(
+                    icon = Icons.Rounded.Audiotrack,
+                    tracks = remember { derivedStateOf { player.state.audio } },
+                    onClick = onTrackClicked,
+                  )
+                  TrackSelector(
+                    icon = Icons.Rounded.Subtitles,
+                    tracks = remember { derivedStateOf { player.state.subtitles } },
+                    onClick = onTrackClicked,
+                  )
+                }
               )
-              Text(
-                text = player.state.duration.formatElapsedTime(),
-                style = MaterialTheme.typography.bodySmall,
+
+              IconButton(
+                modifier = Modifier
+                  .align(Alignment.Center),
+                onClick = {
+                  when (player.state.playbackStatus) {
+                    PlaybackStatus.EndOfFile -> player.play()
+                    PlaybackStatus.Idle -> player.play()
+                    PlaybackStatus.Paused -> player.play()
+                    is PlaybackStatus.Playing -> player.pause()
+                    PlaybackStatus.Stopped -> player.play()
+                  }
+                },
+                content = {
+                  Icon(
+                    modifier = Modifier.size(64.dp),
+                    imageVector = when (player.state.playbackStatus) {
+                      PlaybackStatus.EndOfFile, PlaybackStatus.Stopped -> Icons.Rounded.RestartAlt
+                      PlaybackStatus.Idle -> Icons.Rounded.PlayArrow
+                      PlaybackStatus.Paused -> Icons.Rounded.PlayArrow
+                      is PlaybackStatus.Playing -> Icons.Rounded.Pause
+                    },
+                    contentDescription = null,
+                  )
+                }
               )
-            }
-          )
-          Slider(
-            modifier = Modifier.fillMaxWidth(),
-            interactionSource = sliderSource,
-            value = when {
-              isSliding -> userSliderPosition.floatValue
-              else -> playbackProgress.value
+
+              Column(
+                modifier = Modifier
+                  .align(Alignment.BottomCenter)
+                  .fillMaxWidth(.9f)
+                  .windowInsetsPadding(WindowInsets.systemBars)
+                  .fillMaxWidth(),
+                content = {
+                  val positionAsText = remember {
+                    val builder = StringBuilder()
+                    derivedStateOf { player.state.position.formatElapsedTime(builder) }
+                  }
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    content = {
+                      Text(
+                        text = positionAsText.value,
+                        style = MaterialTheme.typography.bodySmall,
+                      )
+                      Text(
+                        text = player.state.duration.formatElapsedTime(),
+                        style = MaterialTheme.typography.bodySmall,
+                      )
+                    }
+                  )
+                  Slider(
+                    modifier = Modifier.fillMaxWidth(),
+                    interactionSource = sliderSource,
+                    value = when {
+                      isSliding -> userSliderPosition.floatValue
+                      else -> playbackProgress.value
+                    },
+                    onValueChange = { userSliderPosition.floatValue = it },
+                    onValueChangeFinished = {
+                      val target = player.state.duration * userSliderPosition.floatValue.toDouble()
+                      player.seek(target, SeekFlag.Fast)
+                    },
+                  )
+                }
+              )
             },
-            onValueChange = { userSliderPosition.floatValue = it },
-            onValueChangeFinished = {
-              val target = player.state.duration * userSliderPosition.floatValue.toDouble()
-              player.seek(target, SeekFlag.Fast)
-            },
           )
-        }
+
+        },
       )
+
     },
   )
 

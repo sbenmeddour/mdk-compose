@@ -1,12 +1,14 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.*
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.native.cocoapods)
 }
 
 kotlin {
@@ -19,19 +21,36 @@ kotlin {
     
     jvm("desktop")
     
-    listOf(
-        iosX64(),
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "ComposeApp"
+    iosX64()
+    iosArm64()
+    iosSimulatorArm64()
+
+    cocoapods {
+        version = "1.0.1"
+        summary = "MDK compose sample"
+        homepage = "https://github.com/wang-bin/mdk-sdk"
+        name = "KotlinApp"
+        ios.deploymentTarget = "14.1"
+        podfile = project.file("../iosApp/Podfile")
+        license = "MIT"
+        framework {
+            baseName = "KotlinApp"
             isStatic = true
+            //transitiveExport = true
+            //embedBitcode(BitcodeEmbeddingMode.DISABLE)
         }
+        //pod(name = "mdk")
+        xcodeConfigurationToNativeBuildType["CUSTOM_DEBUG"] = NativeBuildType.DEBUG
+        xcodeConfigurationToNativeBuildType["CUSTOM_RELEASE"] = NativeBuildType.RELEASE
     }
+
+    applyDefaultHierarchyTemplate()
     
     sourceSets {
-        val desktopMain by getting
+        val commonMain by getting
+        val desktopMain by getting { dependsOn(commonMain) }
+        val androidMain by getting { dependsOn(commonMain) }
+        val iosMain by getting { dependsOn(commonMain) }
         
         androidMain.dependencies {
             implementation(compose.preview)
