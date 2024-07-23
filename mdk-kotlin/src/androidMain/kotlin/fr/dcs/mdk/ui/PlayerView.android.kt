@@ -1,29 +1,23 @@
 package fr.dcs.mdk.ui
 
-import android.view.SurfaceView
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
-import fr.dcs.mdk.player.Player
-import fr.dcs.mdk.player.configuration.PlayerConfiguration
-import fr.dcs.mdk.player.state.PlayerState
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.viewinterop.*
+import fr.dcs.mdk.player.*
+import fr.dcs.mdk.player.configuration.*
 
 @Composable
 actual fun PlayerView(modifier: Modifier, player: Player) {
   AndroidView(
-    modifier = Modifier,
-    factory = ::SurfaceView,
-    update = {
-      println("<top>.PlayerView.update: $it")
-      player.setSurfaceView(it)
+    modifier = modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen),
+    factory = when (player.configuration.renderTargetType) {
+      RenderTargetType.OpenGl -> RenderTarget::Gl
+      is RenderTargetType.SurfaceView -> RenderTarget::AndroidSurfaceView
+      RenderTargetType.Vulkan -> RenderTarget::Vulkan
     },
-    onRelease = {
-      println("<top>.PlayerView.release: $it")
-      player.detachSurfaceView(it)
-    },
+    update = { player.currentRenderTarget = it },
+    onRelease = { player.currentRenderTarget = null },
   )
 }
 
@@ -31,7 +25,6 @@ actual fun PlayerView(modifier: Modifier, player: Player) {
 @Composable
 actual fun rememberPlayer(
   configuration: PlayerConfiguration,
-  state: PlayerState
 ): Player {
-  return remember { Player(configuration, state) }
+  return remember { Player(configuration) }
 }

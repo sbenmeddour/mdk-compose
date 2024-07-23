@@ -4,70 +4,25 @@ package fr.dcs.mdk
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Audiotrack
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.RestartAlt
-import androidx.compose.material.icons.rounded.Subtitles
-import androidx.compose.material.icons.rounded.VideoSettings
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.interaction.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.*
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import fr.dcs.mdk.player.MediaType
-import fr.dcs.mdk.player.Player
-import fr.dcs.mdk.player.SeekFlag
-import fr.dcs.mdk.player.state.Audio
-import fr.dcs.mdk.player.state.PlaybackStatus
-import fr.dcs.mdk.player.state.Subtitle
-import fr.dcs.mdk.player.state.Track
-import fr.dcs.mdk.player.state.Video
-import fr.dcs.mdk.ui.PlayerView
-import fr.dcs.mdk.ui.rememberPlayer
-import org.jetbrains.compose.ui.tooling.preview.Preview
-import kotlin.time.Duration
+import androidx.compose.ui.graphics.vector.*
+import androidx.compose.ui.platform.*
+import androidx.compose.ui.unit.*
+import androidx.lifecycle.*
+import fr.dcs.mdk.player.*
+import fr.dcs.mdk.player.models.*
+import fr.dcs.mdk.ui.*
+import org.jetbrains.compose.ui.tooling.preview.*
+import kotlin.time.*
 
 @Composable
 @Preview
@@ -107,12 +62,14 @@ fun PlayerPage(modifier: Modifier = Modifier) {
   var isResumed by remember { mutableStateOf(false) }
 
   LaunchedEffect(Unit) {
-    println("Launched effect dans da mere")
-    //player.setMedia("https://vfx.mtime.cn/Video/2021/11/16/mp4/211116131456748178.mp4")
-    player.setMedia("https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_2160p_hevc.mp4")
+    //player.setMedia("https://storage.googleapis.com/exoplayer-test-media-1/mkv/android-screens-lavf-56.36.100-aac-avc-main-1280x720.mkv")
+    //player.setMedia("https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_2160p_hevc.mp4")
     //player.setMedia("https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8")
-    player.prepare()
-    isReady = true
+    //player.setMedia("https://ks3-cn-beijing.ksyun.com/ksplayer/h265/mp4_resource/jinjie_265.mp4")
+    player.setMedia("https://github.com/ietf-wg-cellar/matroska-test-files/raw/master/test_files/test5.mkv")
+    val result = player.prepare()
+    isReady = result.isSuccess
+
   }
 
   LaunchedEffect(isResumed, isReady) {
@@ -203,23 +160,23 @@ fun Controls(
                 content = {
                   val onTrackClicked = { track: Track ->
                     when {
-                      track.isActive -> player.setTrack(track.type, -1)
-                      else -> player.setTrack(track.type, track.index)
+                      track.isActive -> player.setTrack(track.type, null)
+                      else -> player.setTrack(track.type, track.id)
                     }
                   }
                   TrackSelector(
                     icon = Icons.Rounded.VideoSettings,
-                    tracks = remember { derivedStateOf { player.state.video } },
+                    getTracks = { player.state.tracks.video },
                     onClick = onTrackClicked,
                   )
                   TrackSelector(
                     icon = Icons.Rounded.Audiotrack,
-                    tracks = remember { derivedStateOf { player.state.audio } },
+                    getTracks = { player.state.tracks.audio },
                     onClick = onTrackClicked,
                   )
                   TrackSelector(
                     icon = Icons.Rounded.Subtitles,
-                    tracks = remember { derivedStateOf { player.state.subtitles } },
+                    getTracks = { player.state.tracks.subtitles },
                     onClick = onTrackClicked,
                   )
                 }
@@ -228,23 +185,20 @@ fun Controls(
               IconButton(
                 modifier = Modifier
                   .align(Alignment.Center),
-                onClick = {
-                  when (player.state.playbackStatus) {
-                    PlaybackStatus.EndOfFile -> player.play()
-                    PlaybackStatus.Idle -> player.play()
-                    PlaybackStatus.Paused -> player.play()
-                    is PlaybackStatus.Playing -> player.pause()
-                    PlaybackStatus.Stopped -> player.play()
-                  }
+                onClick = when  {
+                  player.state.playbackStatus.isPlaying -> player::pause
+                  else -> player::play
                 },
                 content = {
                   Icon(
                     modifier = Modifier.size(64.dp),
-                    imageVector = when (player.state.playbackStatus) {
-                      PlaybackStatus.EndOfFile, PlaybackStatus.Stopped -> Icons.Rounded.RestartAlt
-                      PlaybackStatus.Idle -> Icons.Rounded.PlayArrow
-                      PlaybackStatus.Paused -> Icons.Rounded.PlayArrow
-                      is PlaybackStatus.Playing -> Icons.Rounded.Pause
+                    imageVector = with (player.state.playbackStatus) {
+                      when {
+                        isPlaying -> Icons.Rounded.Pause
+                        endOfFile || isStopped -> Icons.Rounded.RestartAlt
+                        !hasMedia || isUnloaded -> Icons.Rounded.PlayArrow
+                        else -> Icons.Rounded.PlayArrow
+                      }
                     },
                     contentDescription = null,
                   )
@@ -308,21 +262,23 @@ fun Controls(
 fun TrackSelector(
   modifier: Modifier = Modifier,
   icon: ImageVector,
-  tracks: State<List<Track>>,
+  getTracks: () -> List<Track>,
   onClick: (Track) -> Unit,
 ) {
   var isExpanded by remember { mutableStateOf(false) }
+  val tracks by rememberUpdatedState(getTracks.invoke())
+  val isEnabled by remember { derivedStateOf { tracks.isNotEmpty() }}
   IconButton(
     modifier = modifier,
     onClick = { isExpanded = true },
-    enabled = tracks.value.isNotEmpty(),
+    enabled = isEnabled,
     content = { Icon(imageVector = icon, contentDescription = null) }
   )
   DropdownMenu(
     expanded = isExpanded,
     onDismissRequest = { isExpanded = false },
     content = {
-      for ( track in tracks.value) {
+      for (track in tracks) {
         DropdownMenuItem(
           onClick = {
             onClick.invoke(track)
@@ -336,25 +292,14 @@ fun TrackSelector(
               contentDescription = null,
             )
           },
-          text = {
-            Text(
-              text = when (track) {
-                is Audio -> track.metaData["language"] ?: "Track ${track.index}"
-                is Subtitle -> track.metaData["language"] ?: "Track ${track.index}"
-                is Video -> track.metaData["language"] ?: "Track ${track.index}"
-              },
-            )
-          }
+          text = { Text(text = track.localizedName) },
         )
       }
     },
   )
 }
 
-
-val Track.type: MediaType
-  get() = when (this) {
-    is Audio -> MediaType.Audio
-    is Subtitle -> MediaType.Subtitle
-    is Video -> MediaType.Video
+val Track.localizedName: String
+  get() {
+    return metaData["language"] ?: "Track ${id.value}"
   }

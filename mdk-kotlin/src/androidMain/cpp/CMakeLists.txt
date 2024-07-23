@@ -31,16 +31,18 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 add_library(
         mdk-jni
         SHARED
-        mdk-kotlin/mdk_jni.cpp
-        mdk-kotlin/player_wrapper.hpp
-        mdk-kotlin/player_wrapper.cpp
-        mdk-kotlin/thread_queue.hpp
+        mdk-kotlin/mdk.jni.cpp
+        mdk-kotlin/java_listener.hpp
         mdk-kotlin/utils.hpp
         mdk-kotlin/utils.cpp
 )
 
+find_package(Vulkan REQUIRED)
+include_directories(${Vulkan_INCLUDE_DIRS})
+
 target_link_libraries(
         mdk-jni
         PRIVATE
+        Vulkan::Vulkan
         mdk
         -llog -landroid)

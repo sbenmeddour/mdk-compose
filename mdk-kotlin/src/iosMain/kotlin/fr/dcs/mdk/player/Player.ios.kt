@@ -145,14 +145,11 @@ actual class Player actual constructor(
 
 
   actual fun seek(position: Duration, vararg flag: SeekFlag) {
-    val combinedFlags = flag.map { it.asNativeSeekFlag().nativeValue }
-      .reduce { acc, i -> acc or i }
-      .toUInt()
     val nativePosition = position.inWholeMilliseconds
     memScoped {
       val player = mdkPlayerApi.pointed.`object`
       val callback = cValue<mdkSeekCallback>()
-      mdkPlayerApi.pointed.seekWithFlags!!.invoke(player, nativePosition, combinedFlags, callback)
+      mdkPlayerApi.pointed.seekWithFlags!!.invoke(player, nativePosition, flag.combined, callback)
     }
   }
 

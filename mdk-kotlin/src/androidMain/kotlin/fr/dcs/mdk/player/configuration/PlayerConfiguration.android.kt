@@ -1,9 +1,12 @@
 package fr.dcs.mdk.player.configuration
 
+import fr.dcs.mdk.ui.*
+
 actual class PlayerConfiguration(
   val audioBackends: List<String>,
   val videoDecoders: List<String>,
   actual val properties: Map<String, String>,
+  actual val renderTargetType: RenderTargetType,
 ) {
 
   actual companion object {
@@ -16,6 +19,7 @@ actual class PlayerConfiguration(
           "FFmpeg",
         ),
         properties = emptyMap(),
+        renderTargetType = RenderTargetType.SurfaceView(false),
       )
   }
 

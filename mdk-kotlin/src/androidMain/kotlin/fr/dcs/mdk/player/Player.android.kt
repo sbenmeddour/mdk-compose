@@ -1,168 +1,104 @@
 package fr.dcs.mdk.player
 
-import android.provider.MediaStore.Audio.Media
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import fr.dcs.mdk.jni.JNIPlayer
-import fr.dcs.mdk.jni.JniListener
-import fr.dcs.mdk.native.NativeMediaType
-import fr.dcs.mdk.native.NativeState
-import fr.dcs.mdk.player.configuration.PlayerConfiguration
-import fr.dcs.mdk.player.events.PlayerEvent
-import fr.dcs.mdk.player.state.PlayerState
-import fr.dcs.mdk.utils.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.time.Duration
+import android.opengl.*
+import android.view.*
+import fr.dcs.mdk.jni.*
+import fr.dcs.mdk.player.configuration.*
+import fr.dcs.mdk.player.events.*
+import fr.dcs.mdk.player.models.*
+import fr.dcs.mdk.ui.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import javax.microedition.khronos.egl.EGLConfig
+import javax.microedition.khronos.opengles.*
+import kotlin.reflect.*
+import kotlin.time.*
 import kotlin.time.Duration.Companion.milliseconds
 
-actual class Player actual constructor(
-  configuration: PlayerConfiguration,
-  actual val state: PlayerState,
-) : SurfaceHolder.Callback, Properties {
-
+actual class Player actual constructor(actual val configuration: PlayerConfiguration) : Properties {
 
   internal actual val scope: CoroutineScope = CoroutineScope(context = SupervisorJob() + Dispatchers.IO)
+  private val handle = Mdk.newInstance()
+  actual val properties: Properties get() = this
+  actual val state: PlayerState = PlayerState()
 
-  private val listener = object : JniListener {
-
-    override fun onStateChanged(value: Int) {
-      scope.launch(Dispatchers.Main) { state._nativeState = value }
-    }
-
-    override fun onMediaStatus(previousStatus: Int, newStatus: Int) {
-      scope.launch(Dispatchers.Main) { state._nativeMediaStatus = newStatus }
-    }
-
-    override fun onMediaEvent(error: Long, category: String?, detail: String?) {
-      val event = PlayerEvent.fromData(error, category, detail) ?: return
-      _events.tryEmit(event)
-    }
-
+  init {
+    Mdk.setAudioBackends(handle, configuration.audioBackends.toTypedArray())
+    Mdk.setDecoders(handle, MediaType.Video.nativeValue, configuration.videoDecoders.toTypedArray())
+    for (entry in configuration.properties) properties[entry.key] = entry.key
   }
-
-  private val handle = JNIPlayer.createWrapper(this.listener)
 
   private val _events = MutableSharedFlow<PlayerEvent>(replay = 0, extraBufferCapacity = 1)
   actual val events: Flow<PlayerEvent> get() = _events
-  actual val properties: Properties get() = this
 
-  private var nativeWindowHandle = 0L
-  private var currentSurfaceView: SurfaceView? = null
-    set(value) {
-      if (field == value) return
-      field?.holder?.removeCallback(this)
-      field = value
-      if (value == null) {
-        return
-      }
-      value.holder.addCallback(this)
-    }
-
-  override operator fun get(key: String): String? = JNIPlayer.getProperty(handle, key)
-  override operator fun set(key: String, value: String) = JNIPlayer.setProperty(handle, key, value)
-
-  actual fun play() {
-    JNIPlayer.setState(handle, NativeState.Playing.nativeValue)
-  }
-
-  actual fun pause() {
-    JNIPlayer.setState(handle, NativeState.Paused.nativeValue)
-  }
-
-  actual fun stop() {
-    JNIPlayer.setState(handle, NativeState.Stopped.nativeValue)
-  }
+  override operator fun get(key: String): String? = Mdk.getProperty(handle, key)
+  override operator fun set(key: String, value: String) = Mdk.setProperty(handle, key, value)
+  actual fun play() = Mdk.setState(handle, State.Playing.nativeValue)
+  actual fun pause() = Mdk.setState(handle, State.Paused.nativeValue)
+  actual fun stop() = Mdk.setState(handle, State.Stopped.nativeValue)
 
   actual fun playPause() = when {
-    state._nativeState == NativeState.Playing.nativeValue -> pause()
+    state.state == State.Playing -> pause()
     else -> play()
   }
 
   actual fun setMedia(url: String) {
-    JNIPlayer.setMedia(handle, url)
-    for (type in MediaType.entries) state._activeTracks[type] = listOf(0)
+    Mdk.setMedia(handle,url, MediaType.Video.nativeValue)
+    for (type in MediaType.entries) state.activeTracks[type] = emptyList()
   }
 
-  actual fun release() {
-    stop()
-    scope.cancel()
-    JNIPlayer.release(handle)
-  }
-
-  actual suspend fun prepare(position: Duration, vararg flags: SeekFlag) {
+  actual suspend fun prepare(position: Duration, vararg flags: SeekFlag): Result<Unit> {
     val mediaInfo = withContext(Dispatchers.IO) {
-      JNIPlayer.prepare(handle, position.inWholeMilliseconds, flags.combined, false)
+      runCatching {
+        Mdk.prepare(
+          player = handle,
+          position = position.inWholeMilliseconds,
+          flags = flags.combined,
+          unload = false,
+        )
+      }
     }
-    withContext(Dispatchers.Main) {
-      state._nativeMediaInfo = mediaInfo
-      state._activeTracks[MediaType.Video] = listOf(mediaInfo?.video?.firstOrNull()?.index ?: 0)
-      state._activeTracks[MediaType.Audio] = listOf(mediaInfo?.audio?.firstOrNull()?.index ?: 0)
-      state._activeTracks[MediaType.Subtitle] = listOf(0)
+    return withContext(Dispatchers.Main) {
+      mediaInfo
+        .onSuccess {
+          state.mediaInfo = it
+          state.activeTracks[MediaType.Video] = if (it.video.isEmpty()) emptyList() else listOf(Track.Id(it.video.first().index))
+          state.activeTracks[MediaType.Audio] = if (it.audio.isEmpty()) emptyList() else listOf(Track.Id(it.audio.first().index))
+          state.activeTracks[MediaType.Subtitles] = if (it.subtitles.isEmpty()) emptyList() else listOf(Track.Id(it.subtitles.first().index))
+        }
+        .onFailure {
+          state.mediaInfo = MediaInfo.empty
+          state.activeTracks[MediaType.Video] = emptyList()
+          state.activeTracks[MediaType.Audio] = emptyList()
+          state.activeTracks[MediaType.Subtitles] = emptyList()
+        }
+        .map { Unit }
     }
+
   }
 
-  actual fun setTrack(type: MediaType, index: Int) {
-    val nativeType = when (type) {
-      MediaType.Audio -> NativeMediaType.Audio
-      MediaType.Video -> NativeMediaType.Video
-      MediaType.Subtitle -> NativeMediaType.Subtitles
-      MediaType.Unknown -> NativeMediaType.Unknown
-    }
-    JNIPlayer.setTrack(handle, nativeType.nativeValue, index)
-    state._activeTracks[type] = listOf(index)
+  actual fun setTrack(type: MediaType, id: Track.Id?) {
+    val tracks: List<Pair<Track.Id, Int>> = this.state
+      .mediaInfo[type]
+      .mapIndexedNotNull { index, stream ->
+        when {
+          id != null && stream.index == id.value -> Track.Id(stream.index) to index
+          else -> null
+        }
+      }
+    val indices: IntArray = tracks.map(Pair<*, Int>::second).toIntArray()
+
+    Mdk.setActiveTracks(handle, type.nativeValue, indices)
+    state.activeTracks[type] = tracks.map { it.first }
   }
 
-  actual fun seek(position: Duration, vararg flag: SeekFlag) {
-    val nativeFlags = flag.map { it.asNativeSeekFlag().nativeValue }.reduce { acc, i -> acc or i }
-    JNIPlayer.seek(handle, nativeFlags, position.inWholeMilliseconds)
-  }
-
-  override fun surfaceCreated(holder: SurfaceHolder) {
-    this.nativeWindowHandle = JNIPlayer.setSurface(handle = handle, surface = null, width = 0, height = 0)
-    this.nativeWindowHandle = JNIPlayer.setSurface(
-      handle = handle,
-      surface = holder.surface,
-      width = -1,
-      height = -1,
-    )
-  }
-
-  override fun surfaceDestroyed(holder: SurfaceHolder) {
-    this.nativeWindowHandle = JNIPlayer.setSurface(handle, null, -1, -1)
-  }
-
-  override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-    JNIPlayer.resizeSurface(handle, width, height)
-    /*this.nativeWindowHandle = JNIPlayer.setSurface(
-      handle = handle,
-      surface = holder.surface,
-      width = width,
-      height = height,
-    )*/
-  }
-
-  fun setSurfaceView(view: SurfaceView) {
-    this.currentSurfaceView = view
-  }
-
-  fun detachSurfaceView(view: SurfaceView?) {
-    this.currentSurfaceView = null
-  }
+  actual fun seek(position: Duration, vararg flag: SeekFlag) = Mdk.seek(handle, position.inWholeMilliseconds, flag.combined)
 
   init {
     scope.launch(Dispatchers.IO) {
       while (isActive) {
         try {
-          val position = JNIPlayer.getPosition(handle)
+          val position = Mdk.getPosition(handle)
           withContext(Dispatchers.Main) { state._position = position.milliseconds }
         } finally {
           delay(200.milliseconds)
@@ -171,17 +107,117 @@ actual class Player actual constructor(
     }
   }
 
-  init {
-    JNIPlayer.setAudioBackends(
-      handle = this.handle,
-      values = configuration.audioBackends.toTypedArray(),
-    )
-    JNIPlayer.setDecoders(
-      handle = this.handle,
-      mediaType = NativeMediaType.Video.nativeValue,
-      values = configuration.videoDecoders.toTypedArray(),
-    )
-    for (entry in configuration.properties) properties[entry.key] = entry.key
+
+  private val onStatusChanged = Mdk.OnMediaStatus { _, next ->
+    scope.launch(Dispatchers.Main) {
+      state.status = MediaStatus.Mixed(next)
+    }
   }
+
+
+  private val onStateChanged = Mdk.OnStateChanged { value: Int ->
+    scope.launch(Dispatchers.Main) {
+      state.state = State.fromInt(value)
+    }
+  }
+
+  private val onEvent = Mdk.OnEvent { code: Long, category: String?, details: String? ->
+    val event = PlayerEvent.fromData(code, category, details) ?: return@OnEvent
+    _events.tryEmit(event)
+  }
+
+  private val onLoop = Mdk.OnLoop {
+  }
+
+  private val onCurrentMediaChanged = Mdk.OnCurrentMediaChanged {
+  }
+
+  private val onStatusToken = Mdk.onMediaStatusChanged(handle, onStatusChanged)
+  private val onEventToken = Mdk.onEvent(handle, onEvent)
+  private val onLoopToken = Mdk.onLoop(handle, onLoop)
+  private val onStateChangedAddress = Mdk.onStateChanged(handle, onStateChanged)
+  private val onMediaChangedAddress = Mdk.onCurrentMediaChanged(handle, onCurrentMediaChanged)
+
+  actual fun release() {
+    Mdk.unregisterOnEventCallback(handle, onEventToken.listener, onEventToken.token)
+    Mdk.unregisterOnLoopCallback(handle, onLoopToken.listener, onLoopToken.token)
+    Mdk.unregisterOnMediaStatusChangedCallback(handle, onStatusToken.listener, onStatusToken.token)
+    Mdk.unregisterOnStateChangedCallback(handle, onStateChangedAddress)
+    Mdk.unregisterOnCurrentMediaChangedCallback(handle, onMediaChangedAddress)
+    stop()
+    scope.cancel()
+    Mdk.deleteInstance(handle)
+  }
+
+  private fun invalidRenderTarget(clazz: KClass<out RenderTarget>): Nothing = error("Invalid render target: expected [$clazz]")
+
+  actual var currentRenderTarget: RenderTarget? = null
+    set(value) {
+      if (field === value) return
+      when (val actualValue = field) {
+        is RenderTarget.AndroidSurfaceView -> actualValue.holder.removeCallback(surfaceViewCallback)
+        is RenderTarget.Gl -> actualValue.setRenderer(null)
+        is RenderTarget.Vulkan -> actualValue.holder.removeCallback(vulkanCallback)
+        null -> Unit
+      }
+      field = value
+      when (value) {
+        is RenderTarget.AndroidSurfaceView -> value.holder.addCallback(surfaceViewCallback)
+        is RenderTarget.Gl -> value.setRenderer(glCallback)
+        is RenderTarget.Vulkan -> value.holder.addCallback(vulkanCallback)
+        null -> Unit
+      }
+    }
+
+  private val glCallback = object : GLSurfaceView.Renderer {
+    override fun onDrawFrame(gl: GL10?) = Mdk.renderVideo(handle, null)
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) = Unit
+    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) = Mdk.setVideoSurfaceSize(handle, width, height, null)
+  }
+
+  private val surfaceViewCallback = object : SurfaceHolder.Callback {
+
+    override fun surfaceCreated(holder: SurfaceHolder) {
+      Mdk.updateNativeSurface(handle, null, 0, 0)
+      Mdk.updateNativeSurface(handle, holder.surface, -1, -1)
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+      Mdk.updateNativeSurface(handle, holder.surface, 0, 0)
+    }
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+      Mdk.resizeSurface(handle, width, height)
+    }
+  }
+
+  private val vulkanCallback = object : SurfaceHolder.Callback {
+
+
+    override fun surfaceCreated(holder: SurfaceHolder) {
+      when (val target = currentRenderTarget) {
+        is RenderTarget.Vulkan -> {
+          Mdk.updateNativeSurface(handle, null, 0, 0)
+          target.globalRef = Mdk.setupVulkanRenderer(handle, holder.surface)
+        }
+        else -> invalidRenderTarget(RenderTarget.Vulkan::class)
+      }
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+      when (val target = currentRenderTarget) {
+        is RenderTarget.Vulkan -> Mdk.detachVulkanRenderer(handle, target.globalRef)
+        else -> invalidRenderTarget(RenderTarget.Vulkan::class)
+      }
+    }
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+      when (currentRenderTarget) {
+        is RenderTarget.Vulkan -> Mdk.resizeSurface(handle, width, height)
+        else -> invalidRenderTarget(RenderTarget.Vulkan::class)
+      }
+    }
+  }
+
 
 }
