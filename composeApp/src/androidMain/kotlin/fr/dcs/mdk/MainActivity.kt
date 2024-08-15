@@ -1,8 +1,8 @@
 package fr.dcs.mdk
 
-import android.os.Bundle
+import android.os.*
 import androidx.activity.*
-import androidx.activity.compose.setContent
+import androidx.activity.compose.*
 
 class MainActivity : ComponentActivity() {
 

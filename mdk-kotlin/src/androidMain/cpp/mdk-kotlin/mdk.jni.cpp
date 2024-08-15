@@ -129,17 +129,6 @@ extern "C" {
     }
 
     JNIEXPORT void JNICALL
-    Java_fr_dcs_mdk_jni_Mdk_deleteInstance(
-        JNIEnv *env,
-        jobject thiz,
-        jlong player
-    ) {
-        LOG_INFO("JNI call: deleteInstance: [player=%lld]", player);
-        auto reference = reinterpret_cast<PlayerReference*>(player);
-        delete reference;
-    }
-
-    JNIEXPORT void JNICALL
     Java_fr_dcs_mdk_jni_Mdk_setMute(
         JNIEnv *env,
         jobject thiz,
@@ -1004,31 +993,59 @@ extern "C" {
         if (mdkPlayer == nullptr) return;
         mdkPlayer->renderVideo();
     }
+
+    JNIEXPORT jlong JNICALL
+    Java_fr_dcs_mdk_jni_Mdk_setupVulkanRenderer(
+        JNIEnv *env,
+        jobject thiz,
+        jlong player,
+        jobject surface
+    ) {
+        LOG_INFO("setupVulkanRenderer: [player=%lld, surface=%lld]", player, (int64_t) surface);
+        auto reference = reinterpret_cast<PlayerReference*>(player);
+        auto mdkPlayer = reference->player;
+        if (mdkPlayer == nullptr) return 0;
+        LOG_INFO("setupVulkanRenderer.setProperty");
+        //fixme: is it mandatory ? mdkPlayer->setProperty("video.decoder", "surface=0");
+        auto globalRef = env->NewGlobalRef(surface);
+        VulkanRenderAPI renderApi{};
+        mdkPlayer->setRenderAPI(&renderApi, globalRef);
+        mdkPlayer->updateNativeSurface(surface, -1, -1);
+
+        return reinterpret_cast<jlong>(globalRef);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_fr_dcs_mdk_jni_Mdk_detachVulkanRenderer(
+        JNIEnv *env,
+        jobject thiz,
+        jlong player,
+        jlong globalRef
+    ) {
+        LOG_INFO("detachVulkanRenderer: [globalRef=%lld]", globalRef);
+        auto reference = reinterpret_cast<PlayerReference*>(player);
+        auto mdkPlayer = reference->player;
+        if (mdkPlayer == nullptr) return;
+        auto ref = reinterpret_cast<jobject>(globalRef);
+        //fixme ? crash: mdkPlayer->setRenderAPI(nullptr, nullptr);
+        mdkPlayer->updateNativeSurface(nullptr, 0, 0);
+        env->DeleteGlobalRef(ref);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_fr_dcs_mdk_jni_Mdk_deleteInstance(
+        JNIEnv *env,
+        jobject thiz,
+        jlong player
+    ) {
+        LOG_INFO("JNI call: deleteInstance: [player=%lld]", player);
+        auto reference = reinterpret_cast<PlayerReference*>(player);
+        delete reference;
+    }
+
 }
 
-
-extern "C"
-JNIEXPORT jlong JNICALL
-Java_fr_dcs_mdk_jni_Mdk_setupVulkanRenderer(
-    JNIEnv *env,
-    jobject thiz,
-    jlong player,
-    jobject surface
-) {
-    LOG_INFO("setupVulkanRenderer: [player=%lld, surface=%lld]", player, (int64_t) surface);
-    auto reference = reinterpret_cast<PlayerReference*>(player);
-    auto mdkPlayer = reference->player;
-    if (mdkPlayer == nullptr) return 0;
-    LOG_INFO("setupVulkanRenderer.setProperty");
-    //mdkPlayer->setProperty("video.decoder", "surface=0");
-    auto globalRef = env->NewGlobalRef(surface);
-    mdkPlayer->updateNativeSurface(surface, -1, -1);
-
-    VulkanRenderAPI renderApi{};
-    mdkPlayer->setRenderAPI(&renderApi, globalRef);
-    return reinterpret_cast<jlong>(globalRef);
-}
-
+//fixme: this is not working, and causes glitches
 /*extern "C"
 JNIEXPORT void JNICALL
 Java_fr_dcs_mdk_jni_Mdk_updateVulkanView(
@@ -1047,24 +1064,3 @@ Java_fr_dcs_mdk_jni_Mdk_updateVulkanView(
     mdkPlayer->resizeSurface(width, height);
     //mdkPlayer->setVideoSurfaceSize(width, height, surface);
 }*/
-
-
-//fixme: not tested yet
-extern "C"
-JNIEXPORT void JNICALL
-Java_fr_dcs_mdk_jni_Mdk_detachVulkanRenderer(
-        JNIEnv *env,
-        jobject thiz,
-        jlong player,
-        jlong globalRef
-) {
-    LOG_INFO("detachVulkanRenderer: [globalRef=%lld]", globalRef);
-    auto reference = reinterpret_cast<PlayerReference*>(player);
-    auto mdkPlayer = reference->player;
-    if (mdkPlayer == nullptr) return;
-    auto ref = reinterpret_cast<jobject>(globalRef);
-    mdkPlayer->setRenderAPI(nullptr, ref);
-    mdkPlayer->updateNativeSurface(ref, 0, 0);
-    env->DeleteGlobalRef(ref);
-
-}

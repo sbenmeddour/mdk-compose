@@ -15,11 +15,11 @@ actual class PlayerConfiguration(
       get() = PlayerConfiguration(
         audioBackends = listOf("AudioTrack", "OpenSL"),
         videoDecoders = listOf(
-          "AMediaCodec:java=0:copy=0:surface=1:image=1:async=0:low_latency=1",
+          "AMediaCodec:java=0:copy=0:surface=1:image=1:async=0:low_latency=1:dv=1",
           "FFmpeg",
         ),
         properties = emptyMap(),
-        renderTargetType = RenderTargetType.SurfaceView(false),
+        renderTargetType = RenderTargetType.Vulkan,
       )
   }
 

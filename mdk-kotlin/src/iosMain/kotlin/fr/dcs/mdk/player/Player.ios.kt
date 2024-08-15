@@ -3,7 +3,8 @@ package fr.dcs.mdk.player
 import cocoapods.mdk.*
 import fr.dcs.mdk.player.configuration.*
 import fr.dcs.mdk.player.events.*
-import fr.dcs.mdk.player.state.*
+import fr.dcs.mdk.player.models.*
+import fr.dcs.mdk.ui.*
 import fr.dcs.mdk.utils.*
 import kotlinx.cinterop.*
 import kotlinx.cinterop.ByteVar
@@ -14,15 +15,13 @@ import platform.Metal.*
 import platform.MetalKit.*
 import platform.UIKit.*
 import platform.darwin.*
+import platform.posix.*
 import kotlin.math.*
 import kotlin.time.*
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-actual class Player actual constructor(
-  configuration: PlayerConfiguration,
-  actual val state: PlayerState
-) : NSObject(), MTKViewDelegateProtocol {
+actual class Player actual constructor(actual val configuration: PlayerConfiguration) : NSObject(), MTKViewDelegateProtocol {
 
   private val mdkPlayerApi: CPointer<mdkPlayerAPI> = mdkPlayerAPI_new()!!
 
@@ -30,8 +29,8 @@ actual class Player actual constructor(
   internal val _events = MutableSharedFlow<PlayerEvent>(replay = 0, extraBufferCapacity = 1)
   private val callbacks = Callbacks(StableRef.create(this))
 
+  actual val state: PlayerState = PlayerState()
   actual val events: Flow<PlayerEvent> get() = _events
-
   actual val properties: Properties = object : Properties {
 
     override operator fun set(key: String, value: String) = memScoped {
@@ -101,7 +100,7 @@ actual class Player actual constructor(
     }
   }
 
-  actual suspend fun prepare(position: Duration, vararg flags: SeekFlag) {
+  actual suspend fun prepare(position: Duration, vararg flags: SeekFlag): Result<Unit> {
     val player = mdkPlayerApi.pointed.`object`
     val kotlinCallback = KotlinPrepareCallback(mdkPlayerApi)
     val kotlinCallbackRef = StableRef.create(kotlinCallback)
@@ -115,41 +114,52 @@ actual class Player actual constructor(
       p3 = callback,
       p4 = flags.combined.toUInt(),
     )
-    val result = try { kotlinCallback.await() } finally { kotlinCallbackRef.dispose() }
-    withContext(Dispatchers.Main) { state._nativeMediaInfo = result.info }
+    return kotlinCallback.result()
+      .also { kotlinCallbackRef.dispose() }
+      .mapCatching { it.info }
+      .onSuccess {
+        state.mediaInfo = it
+        state.activeTracks[MediaType.Video] = if (it.video.isEmpty()) emptyList() else listOf(Track.Id(it.video.first().index))
+        state.activeTracks[MediaType.Audio] = if (it.audio.isEmpty()) emptyList() else listOf(Track.Id(it.audio.first().index))
+        state.activeTracks[MediaType.Subtitles] = if (it.subtitles.isEmpty()) emptyList() else listOf(Track.Id(it.subtitles.first().index))
+      }
+      .onFailure {
+        state.mediaInfo = MediaInfo.empty
+        state.activeTracks[MediaType.Video] = emptyList()
+        state.activeTracks[MediaType.Audio] = emptyList()
+        state.activeTracks[MediaType.Subtitles] = emptyList()
+      }
+      .map { Unit }
   }
 
-  //todo: Not tested yet
-  actual fun setTrack(type: MediaType, index: Int) {
+  actual fun setTrack(type: MediaType, id: Track.Id?) {
+    val tracks: List<Pair<Track.Id, Int>> = this.state
+      .mediaInfo[type]
+      .mapIndexedNotNull { index, stream ->
+        when {
+          id != null && stream.index == id.value -> Track.Id(stream.index) to index
+          else -> null
+        }
+      }
+    val indices: IntArray = tracks.map(Pair<*, Int>::second).toIntArray()
+
     memScoped {
-      val player = mdkPlayerApi.pointed.`object`
-      val nativeType = when (type) {
-        MediaType.Unknown -> MDK_MediaType_Unknown
-        MediaType.Audio -> MDK_MediaType_Audio
-        MediaType.Video -> MDK_MediaType_Video
-        MediaType.Subtitle -> MDK_MediaType_Subtitle
-      }
-      val activeTracksList: List<Int> = when {
-        index == -1 -> emptyList()
-        else -> listOf(index)
-      }
-      state.activeTracks[type] = activeTracksList
-
-      val arraySize = activeTracksList.size + 1
+      val arraySize = indices.size + 1
       val cArray = allocArray<IntVar>(arraySize).apply {
-        for (i in activeTracksList.indices) this[i] = activeTracksList[i]
+        for (i in indices.indices) this[i] = indices[i]
       }
-      mdkPlayerApi.pointed.setActiveTracks!!.invoke(player, nativeType, cArray, arraySize.toULong())
+      val player = mdkPlayerApi.pointed.`object`
+      mdkPlayerApi.pointed.setActiveTracks!!.invoke(player, type.nativeValue, cArray, arraySize.toULong())
     }
+    state.activeTracks[type] = tracks.map { it.first }
   }
-
 
   actual fun seek(position: Duration, vararg flag: SeekFlag) {
     val nativePosition = position.inWholeMilliseconds
     memScoped {
       val player = mdkPlayerApi.pointed.`object`
       val callback = cValue<mdkSeekCallback>()
-      mdkPlayerApi.pointed.seekWithFlags!!.invoke(player, nativePosition, flag.combined, callback)
+      mdkPlayerApi.pointed.seekWithFlags!!.invoke(player, nativePosition, flag.combined.toUInt(), callback)
     }
   }
 
@@ -190,6 +200,45 @@ actual class Player actual constructor(
       free(callbacks.onMediaStatusToken)
     }
   }
+
+  actual var currentRenderTarget: RenderTarget? = null
+    set(value) {
+      with(mdkPlayerApi.pointed) {
+        //fixme: crash setRenderAPI?.invoke(`object`, null, null)
+      }
+      when (val actualValue = field) {
+        is RenderTarget.Metal -> {
+          actualValue.view.device = null
+          actualValue.view.delegate = null
+        }
+        is RenderTarget.View -> TODO()
+        null -> Unit
+      }
+      field = value
+      when (val newValue = value) {
+        is RenderTarget.Metal -> {
+          newValue.view.framebufferOnly = false
+          newValue.view.device = metalDevice
+          newValue.view.delegate = this
+          memScoped {
+            val renderApi = alloc<mdkMetalRenderAPI>().apply {
+              type = MDK_RenderAPI_Metal
+              device = interpretCPointer(newValue.view.device!!.objcPtr())
+              cmdQueue = interpretCPointer(metalCommandQueue.objcPtr())
+              opaque = interpretCPointer(newValue.view.objcPtr())
+              currentRenderTarget = staticCFunction(::_renderOnMetalTexture)
+              layer = interpretCPointer(newValue.view.layer.objcPtr())
+            }
+            with(mdkPlayerApi.pointed) {
+              setRenderAPI?.invoke(`object`, renderApi.ptr.reinterpret(), null)
+            }
+          }
+        }
+        is RenderTarget.View -> TODO()
+        null -> Unit
+      }
+    }
+
 
   /**
    * Render region
@@ -244,6 +293,8 @@ actual class Player actual constructor(
 
 
 }
+
+private suspend fun <T> Deferred<T>.result(): Result<T> = kotlin.runCatching { await() }
 
 
 

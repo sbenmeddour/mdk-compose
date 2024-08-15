@@ -29,7 +29,10 @@ expect class Player(configuration: PlayerConfiguration) {
 
   suspend fun prepare(position: Duration = Duration.ZERO, vararg flags: SeekFlag = arrayOf(SeekFlag.Default)): Result<Unit>
 
+}
 
+sealed class PlayerException(message: String) : Exception(message) {
+  class PrepareException(val code: Long) : PlayerException("Prepare failed: [error=$code")
 }
 
 interface Properties {

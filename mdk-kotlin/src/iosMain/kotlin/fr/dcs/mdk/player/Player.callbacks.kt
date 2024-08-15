@@ -1,8 +1,8 @@
 package fr.dcs.mdk.player
 
 import cocoapods.mdk.*
-import fr.dcs.mdk.native.NativeMediaInfo
 import fr.dcs.mdk.player.events.*
+import fr.dcs.mdk.player.models.*
 import fr.dcs.mdk.utils.*
 import kotlinx.cinterop.*
 import platform.MetalKit.*
@@ -27,7 +27,6 @@ internal class Callbacks(val reference: StableRef<Player>) {
   val logHandler = cValue<mdkLogHandler> {
     cb = staticCFunction { level, value, opaque ->
       val message = value?.toKStringFromUtf8().orEmpty()
-      return@staticCFunction
       when {
         message.contains("getVideoOutContext") -> return@staticCFunction
         message.contains("to be destroyed is not rendered by") -> return@staticCFunction
@@ -62,27 +61,35 @@ private fun _onMediaEvent(event: CPointer<mdkMediaEvent>?, opaque: COpaquePointe
 private fun _onMediaStatus(oldValue: MDK_MediaStatus, newValue: MDK_MediaStatus, opaque: COpaquePointer?): Boolean {
   val playerRef = opaque?.asStableRef<Player>() ?: return false
   val player = playerRef.get()
-  player.state._nativeMediaStatus = newValue
+  player.state.status = MediaStatus.Mixed(newValue)
   return false
 }
 
 private fun _onStateChanged(state: MDK_State, opaque: COpaquePointer?) {
   val playerRef = opaque?.asStableRef<Player>() ?: return
   val player = playerRef.get()
-  player.state._nativeState = state.toInt()
+  player.state.state = State.fromInt(state.toInt())
 }
 
 internal fun _onPrepared(position: Long, boost: CPointer<BooleanVar>?, opaque: COpaquePointer?): Boolean {
   boost?.pointed?.value = true
   val unwrapped = opaque!!.asStableRef<KotlinPrepareCallback>().get()
-  val result = KotlinPrepareResult(
-    position = position,
-    info = with (unwrapped.player.pointed) {
-      val mdkMediaInfo = this.mediaInfo!!.invoke(`object`)
-      NativeMediaInfo.fromC(mdkMediaInfo?.pointed)
-    },
-  )
-  unwrapped.complete(result)
+  when {
+    position < 0 -> {
+      val error = PlayerException.PrepareException(position)
+      unwrapped.completeExceptionally(error)
+    }
+    else -> {
+      val result = KotlinPrepareResult(
+        position = position,
+        info = with (unwrapped.player.pointed) {
+          val mdkMediaInfo = this.mediaInfo!!.invoke(`object`)
+          MediaInfo.fromC(mdkMediaInfo?.pointed)
+        },
+      )
+      unwrapped.complete(result)
+    }
+  }
   return true
 }
 

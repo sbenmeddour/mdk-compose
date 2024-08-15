@@ -1,9 +1,8 @@
 package fr.dcs.mdk.player
 
-import fr.dcs.mdk.native.*
-import fr.dcs.mdk.native.NativeMediaInfo
+import fr.dcs.mdk.player.models.*
 
 internal class KotlinPrepareResult(
   val position: Long,
-  val info: NativeMediaInfo?,
+  val info: MediaInfo,
 )

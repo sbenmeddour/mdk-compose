@@ -1,14 +1,14 @@
 package fr.dcs.mdk.utils
 
 import cocoapods.mdk.*
-import fr.dcs.mdk.native.*
+import fr.dcs.mdk.player.models.*
 import kotlinx.cinterop.*
 import platform.posix.*
 
-internal fun NativeMediaInfo.Companion.fromC(value: mdkMediaInfo?): NativeMediaInfo? {
-  if (value == null) return null
+internal fun MediaInfo.Companion.fromC(value: mdkMediaInfo?): MediaInfo {
+  if (value == null) return MediaInfo.empty
   return memScoped {
-    NativeMediaInfo(
+    MediaInfo(
       startTime = value.start_time,
       duration = value.duration,
       bitRate = value.bit_rate,
@@ -23,7 +23,7 @@ internal fun NativeMediaInfo.Companion.fromC(value: mdkMediaInfo?): NativeMediaI
           val codec = alloc<mdkAudioCodecParameters>().apply { MDK_AudioStreamCodecParameters(element.ptr, this.ptr) }
 
           add(
-            NativeAudioStream(
+            AudioStream(
               index = element.index,
               startTime = element.start_time,
               duration = element.duration,
@@ -36,7 +36,7 @@ internal fun NativeMediaInfo.Companion.fromC(value: mdkMediaInfo?): NativeMediaI
                   put(mapKey, mapValue)
                 }
               },
-              codec = NativeAudioCodec(
+              codec = AudioCodec(
                 codec = codec.codec?.toKStringFromUtf8().orEmpty(),
                 codecTag = codec.codec_tag.toInt(),
                 bitRate = codec.bit_rate,
@@ -62,13 +62,13 @@ internal fun NativeMediaInfo.Companion.fromC(value: mdkMediaInfo?): NativeMediaI
           val element = videoTracks[i]
           val codec = alloc<mdkVideoCodecParameters>().apply { MDK_VideoStreamCodecParameters(element.ptr, this.ptr) }
           add(
-            NativeVideoStream(
+            VideoStream(
               index = element.index,
               startTime = element.start_time,
               duration = element.duration,
               frames = element.frames,
               rotation = element.rotation,
-              codec = NativeVideoCodec(
+              codec = VideoCodec(
                 codec = codec.codec?.toKStringFromUtf8().orEmpty(),
                 codecTag = codec.codec_tag.toInt(),
                 bitRate = codec.bit_rate,
@@ -100,7 +100,7 @@ internal fun NativeMediaInfo.Companion.fromC(value: mdkMediaInfo?): NativeMediaI
           val element = audioTracks[i]
           val codec = alloc<mdkSubtitleCodecParameters>().apply { MDK_SubtitleStreamCodecParameters(element.ptr, this.ptr) }
           add(
-            NativeSubtitle(
+            Subtitle(
               index = element.index,
               startTime = element.start_time,
               duration = element.duration,
@@ -112,7 +112,7 @@ internal fun NativeMediaInfo.Companion.fromC(value: mdkMediaInfo?): NativeMediaI
                   put(mapKey, mapValue)
                 }
               },
-              codec = NativeSubtitleCodec(
+              codec = SubtitleCodec(
                 codec = codec.codec?.toKStringFromUtf8().orEmpty(),
                 codecTag = codec.codec_tag.toInt(),
               ),
