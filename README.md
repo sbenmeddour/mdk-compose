@@ -1,5 +1,5 @@
 # mdk-compose
-MDK player wrapper for Compose-Multiplatform
+[MDK player](https://github.com/wang-bin/mdk-sdk) wrapper for Compose-Multiplatform
 Under development, not ready at all
 
 ## Compatibility
