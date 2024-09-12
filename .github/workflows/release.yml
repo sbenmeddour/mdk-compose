@@ -1,8 +1,6 @@
 name: Publish Artifacts
 on:
-  release:
-    types:
-      - published
+  workflow_dispatch:
 jobs:
   build:
     name: Build
@@ -47,4 +45,4 @@ jobs:
 
       - name: Publish To Maven Central
         run: |
-          ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
+          ./gradlew publishAndReleaseToMavenLocal --no-configuration-cache
