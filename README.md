@@ -14,7 +14,7 @@ Under development, not ready at all
     - [ ] macOS
     - [ ] Windows
 
-#### TO DO :
+## TO DO :
 - [ ] Windows
 - [ ] macOS
 - [ ] fix issues
