@@ -1,14 +1,24 @@
+import com.vanniktech.maven.publish.*
+
 plugins {
   alias(libs.plugins.kotlinMultiplatform)
   alias(libs.plugins.androidLibrary)
   alias(libs.plugins.native.cocoapods)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.jetbrainsCompose)
+  id("com.vanniktech.maven.publish") version "0.28.0"
 }
+
+val versionName = project.property("versionName") as String
+
+group = "fr.dcs.mdk"
+version = versionName
 
 kotlin {
 
-  androidTarget()
+  androidTarget {
+    publishLibraryVariants("release", "debug")
+  }
   jvm("desktop")
 
   iosX64()
@@ -78,4 +88,38 @@ android {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
+}
+
+
+mavenPublishing {
+  coordinates(
+    groupId = "io.github.sbenmeddour",
+    artifactId = "mdk-compose",
+    version = versionName
+  )
+  pom {
+    name.set("MDK-Player compose wrapper")
+    description.set("A compose wrapper for MDK-Player")
+    inceptionYear.set("2024")
+    url.set("https://github.com/sbenmeddour/mdk-compose")
+    licenses {
+      license {
+        name.set("Apache-2.0")
+        url.set("http://www.apache.org/licenses/")
+      }
+    }
+    developers {
+      developer {
+        id.set("sbenmeddour")
+        name.set("Samy")
+        email.set("samy.benmeddour@gmail.com")
+      }
+    }
+    scm {
+      url.set("https://github.com/sbenmeddour/mdk-compose")
+    }
+  }
+
+  publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+  signAllPublications()
 }
