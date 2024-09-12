@@ -20,6 +20,8 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: |
           brew install gpg
+          echo "$SIGNING_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
           echo "$SIGNING_KEY" | gpg --dearmor > ${HOME}/secring.gpg
 
       - name: Setup Gradle
@@ -45,4 +47,4 @@ jobs:
 
       - name: Publish To Maven Central
         run: |
-          ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
+          ./gradlew publishAndReleaseToMavenCentral --info --no-configuration-cache
