@@ -1,7 +1,19 @@
 # mdk-compose
 MDK player wrapper for Compose-Multiplatform
 
-#Usage:
+## Compatibility
+- Android
+    - [x] SufaceView
+    - [x] Vulkan
+    - [x] GL
+- iOS
+    - [x] Metal
+    - [ ] UIView
+- Desktop
+    - [ ] macOS
+    - [ ] Windows
+
+# Usage:
 ``` kotlin
 val player = rememberPlayer()
 PlayerView(
