@@ -39,7 +39,6 @@ kotlin {
             //transitiveExport = true
             //embedBitcode(BitcodeEmbeddingMode.DISABLE)
         }
-        //pod(name = "mdk")
         xcodeConfigurationToNativeBuildType["CUSTOM_DEBUG"] = NativeBuildType.DEBUG
         xcodeConfigurationToNativeBuildType["CUSTOM_RELEASE"] = NativeBuildType.RELEASE
     }
@@ -57,7 +56,7 @@ kotlin {
             implementation(libs.androidx.activity.compose)
         }
         commonMain.dependencies {
-            implementation(project(":mdk-kotlin"))
+            implementation(project(":mdk-compose"))
             implementation(libs.lifecycle.common)
             implementation(compose.runtime)
             implementation(compose.foundation)

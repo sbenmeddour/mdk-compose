@@ -1,4 +1,4 @@
-rootProject.name = "mdk-compose"
+rootProject.name = "mdk-compose-project"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
@@ -29,4 +29,4 @@ dependencyResolutionManagement {
 }
 
 include(":composeApp")
-include(":mdk-kotlin")
+include(":mdk-compose")

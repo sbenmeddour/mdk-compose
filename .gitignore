@@ -20,3 +20,4 @@ captures
 /mdk-kotlin/src/androidMain/cpp/mdk-sdk-android.7z
 /iosApp/Pods/
 /iosApp/Podfile.lock
+/mdk-compose/
