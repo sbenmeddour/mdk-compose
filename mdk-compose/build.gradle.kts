@@ -30,7 +30,7 @@ kotlin {
     framework {
       baseName = "MdkKotlin"
     }
-    pod(name = "mdk", version = "0.29.1")
+    pod(name = "mdk")
     noPodspec()
   }
 

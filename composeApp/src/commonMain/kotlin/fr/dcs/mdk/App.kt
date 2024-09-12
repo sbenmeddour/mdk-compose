@@ -17,7 +17,10 @@ fun App() {
         modifier = Modifier.fillMaxSize(),
         content = {
           val controller = rememberNavController()
-          CompositionLocalProvider(LocalNavController provides controller) { Navigation()  }
+          CompositionLocalProvider(
+            value = LocalNavController provides controller,
+            content = { Navigation() },
+          )
         },
       )
     }

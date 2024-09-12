@@ -11,11 +11,11 @@ import androidx.compose.ui.unit.*
 import kotlin.io.encoding.*
 
 private val urls = listOf(
-  "720p avc MKV" to "https://storage.googleapis.com/exoplayer-test-media-1/mkv/android-screens-lavf-56.36.100-aac-avc-main-1280x720.mkv",
-  "Apple bip bop M3U8" to "https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8",
-  "720p avc MKV" to "https://storage.googleapis.com/exoplayer-test-media-1/mkv/android-screens-lavf-56.36.100-aac-avc-main-1280x720.mkv",
-  "H265 mkv" to "https://ks3-cn-beijing.ksyun.com/ksplayer/h265/mp4_resource/jinjie_265.mp4",
-  "Sample with subtitles" to "https://github.com/ietf-wg-cellar/matroska-test-files/raw/master/test_files/test5.mkv",
+  "Chronometer [m3u8]" to "https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8",
+  "Test subtitles [mkv]" to "https://github.com/ietf-wg-cellar/matroska-test-files/raw/master/test_files/test5.mkv",
+  "1080p - 60fps - HEVC [mp4]" to "https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_1080p_hevc.mp4",
+  "1440p - 60fps - HEVC [mp4]" to "https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_1440p_hevc.mp4",
+  "2160p - 60fps - HEVC [mp4]" to "https://lafibre.info/videos/test/201411_blender_big_buck_bunny_60fps_2160p_hevc.mp4",
 )
 
 @Composable
