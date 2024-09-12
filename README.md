@@ -20,16 +20,20 @@ Under development, not ready at all
 - [ ] fix issues
 - [ ] iOS UIView
 - [ ] Expose more APIs
-- [ ] Publish artifact
+- [x] Publish artifacts
+- [ ] Subtitles styling configuration
 
 ## Usage:
 ``` kotlin
 val player = rememberPlayer()
 PlayerView(
-    modifier = Modifier.fillMaxSize(),
-    player = player,
+  modifier = Modifier.fillMaxSize(),
+  player = player,
 )
 LaunchedEffect(Unit) {
-    player.setMedia(url)
-    player.prepare().onSuccess { player.play() }
+  player.setMedia(url)
+  player.prepare().onSuccess { player.play() }
+}
+DisposableEffect(Unit) {
+  onDispose { player.release() }
 }
