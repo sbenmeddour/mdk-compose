@@ -1,5 +1,6 @@
 # mdk-compose
 MDK player wrapper for Compose-Multiplatform
+Under development, not ready at all
 
 ## Compatibility
 - Android
@@ -13,7 +14,15 @@ MDK player wrapper for Compose-Multiplatform
     - [ ] macOS
     - [ ] Windows
 
-# Usage:
+#### TO DO :
+- [ ] Windows
+- [ ] macOS
+- [ ] fix issues
+- [ ] iOS UIView
+- [ ] Expose more APIs
+- [ ] Publish artifact
+
+## Usage:
 ``` kotlin
 val player = rememberPlayer()
 PlayerView(
